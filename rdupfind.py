@@ -40,7 +40,6 @@ def dupfind(topdir, hashsums={}, n = 20, ntrials=2, blockSize = 4096, noverify =
                 continue
             fsize = os.path.getsize(fname)
 
-
             found = True
             if fsize not in hashsums: # the easy case
                 hashsums[fsize] = FileOrHash(isHash = False, filename = fname)
@@ -66,7 +65,18 @@ def dupfind(topdir, hashsums={}, n = 20, ntrials=2, blockSize = 4096, noverify =
                         foh = foh.hashsum[hash2]
                         basename = foh.filename
                 if found:
-                    yield fname, basename
+                    if noverify:
+                        yield fname, basename
+                    else:
+                        if not foh.fullhash:
+                            foh.fullhash = {}
+                            hash1 = hashfile(basename, byteOffsets = range(0, os.path.getsize(basename), blockSize), blockSize = blockSize)
+                            foh.fullhash[hash1] = basename
+                        hash2 = hashfile(fname, byteOffsets = range(0, fsize, blockSize), blockSize = blockSize)
+                        if hash2 in foh.fullhash:
+                            yield fname, basename
+                        else:
+                            foh.fullhash[hash2] = fname
 
 def getNewRSeq(n, blockSize, fileSize):
     res = []
