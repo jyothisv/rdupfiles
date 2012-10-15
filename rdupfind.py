@@ -5,20 +5,19 @@ from math import floor
 from random import randint
 
 class FileOrHash:
-    def __init__(self, isHash, filename = "", hashsum = {}, rseq = []):
+    def __init__(self, isHash, filename = "", hashsum = {}, rseq = [], fullhash = None):
         self.isHash   = isHash
         self.hashsum  = hashsum
         self.filename = filename
+        self.fullhash = fullhash
         self.rseq = rseq
 
-def hashfile(f, byteOffsets=[0], blockSize=4096):
+def hashfile(f, byteOffsets=range(1), blockSize=4096):
     dig    = hashlib.sha1()
-
     # Get access and modification times for restoring later
     atime  = os.path.getatime(f)
     mtime  = os.path.getmtime(f)
     infile = open(f, mode="rb")
-
     for byte in byteOffsets:
         infile.seek(byte, 0)
         buf = infile.read(blockSize)
@@ -26,7 +25,6 @@ def hashfile(f, byteOffsets=[0], blockSize=4096):
             continue
         dig.update(buf)
     infile.close()
-
     try:
         os.utime(f, (atime, mtime)) # Try to restore atime and mtime
     except OSError as e:            # Well I tried, didn't I? It just didn't work out.
@@ -53,7 +51,7 @@ def dupfind(topdir, hashsums={}, n = 20, ntrials=2, blockSize = 4096, noverify =
                 for i in range(ntrials):
                     if not foh.isHash:
                         rseq = getNewRSeq(n, blockSize, fsize)
-                        rseq.sort()
+                        #rseq.sort()
                         hash1 = hashfile(foh.filename, byteOffsets = rseq)
                         foh.hashsum[hash1] = FileOrHash(isHash = False, filename = foh.filename)
                         foh.rseq = rseq
@@ -73,10 +71,12 @@ def dupfind(topdir, hashsums={}, n = 20, ntrials=2, blockSize = 4096, noverify =
 def getNewRSeq(n, blockSize, fileSize):
     res = []
     maxN = floor(fileSize/blockSize)
+    l = 0
     for i in range(n):
-        res.append(randint(0, maxN) * blockSize)
+        r = floor((i+1)*maxN/n)
+        res.append(randint(l, r) * blockSize)
+        l = r
     return res
-
 
 if __name__ == "__main__":
     import argparse
