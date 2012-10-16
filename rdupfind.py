@@ -101,21 +101,34 @@ def getNewRSeq(n, blockSize, fileSize):
     l = 0
     for i in range(n):
         r = floor((i+1)*maxN/n)
-        res.append(randint(l, r) * blockSize)
+        res.append(randint(l, r) * blockSize) # We use l, r to make sure that the numbers are widely spread out.
         l = r
     return res
 
 if __name__ == "__main__":
-    import argparse
-    parser = argparse.ArgumentParser(description = 'Find duplicate files')
-    parser.add_argument('dirs', metavar='Dir', type=str, nargs='*', help='dirs to traverse')
+    try:
+        import argparse
+        parser = argparse.ArgumentParser(description = 'Find duplicate files')
+        parser.add_argument('dirs', metavar='Dir', type=str, nargs='*', help='dirs to traverse')
+        parser.add_argument("--noverify", help="Do not verify using a full hash for each match", action="store_true")
+        parser.add_argument("--bs", help="size of a block", type=int, default=4096)
+        parser.add_argument("--nblocks", help="Number of blocks to use in one trial", type=int, default=5)
+        parser.add_argument("--ntrials", help="Number of trials to perform", type=int, default=2)
+        parser.add_argument("--printf", help="Printf format string. {0} for the duplicate file, {1} for the base file", type=str, default=None)
+        parser.add_argument("-q", "--quiet", help="print each file as it is found", action="store_true")
 
-    args = parser.parse_args()
 
-    if not args.dirs:
-        args.dirs=["."]
-    hashsums={}
-    for d in args.dirs:
-        res = dupfind(d, hashsums)
-        for f, base in res:
-            print(f, " is a copy of " , base)
+        args = parser.parse_args()
+
+        if not args.dirs:
+            args.dirs=["."]
+            hashsums={}
+            for d in args.dirs:
+                res = dupfind(d, hashsums, noverify = args.noverify)
+                for f, base in res:
+                    if not args.printf:
+                        args.printf = "{0}"
+                    if not args.quiet:
+                        print(args.printf.format(f, base))
+    except KeyboardInterrupt as e:
+        print("Interrupt received. Quitting")
