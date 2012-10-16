@@ -49,7 +49,7 @@ def hashfile(f, byteOffsets=range(1), blockSize=4096):
     return dig.hexdigest()
 
 
-def dupfind(topdir, hashsums={}, n = 20, ntrials=2, blockSize = 4096, noverify = False):
+def dupfind(topdir, hashsums={}, nblocks = 20, ntrials=2, blockSize = 4096, noverify = False):
     for root, dirs, files in os.walk(topdir):
         for f in files:
             fname = os.path.join(root, f)
@@ -66,7 +66,7 @@ def dupfind(topdir, hashsums={}, n = 20, ntrials=2, blockSize = 4096, noverify =
                 basename = foh.filename
                 for i in range(ntrials):
                     if not foh.isHash:
-                        rseq = getNewRSeq(n, blockSize, fsize)
+                        rseq = getNewRSeq(nblocks, blockSize, fsize)
                         #rseq.sort()
                         hash1 = hashfile(foh.filename, byteOffsets = rseq)
                         foh.hashsum[hash1] = FileOrHash(isHash = False, filename = foh.filename)
@@ -124,7 +124,7 @@ if __name__ == "__main__":
             args.dirs=["."]
             hashsums={}
             for d in args.dirs:
-                res = dupfind(d, hashsums, noverify = args.noverify)
+                res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials, blockSize = args.bs, noverify = args.noverify)
                 for f, base in res:
                     if not args.printf:
                         args.printf = "{0}"
