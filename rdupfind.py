@@ -51,30 +51,36 @@ def hashfile(f, byteOffsets=range(1), blockSize=4096):
     return dig.hexdigest()
 
 
-def prune_regexps(lst, regexps, inplace = False, preprocess = None):
-    if not regexps:
-        return lst
-
-    def error_free_match(rex, s):
-        if preprocess:
-            s = preprocess(s)
+def safe_prune(s, regexps, preprocess = None, pred = None):
+    if pred and pred(s):
+        return True
+    if preprocess:
+        s = preprocess(s)       # Preprocessing is only done for regexp matching because pred might need the full filename
+    for rex in regexps:
         try:
-            return re.search(rex, s)
+            if re.search(rex, s):
+                return True
         except:
             return False
+    return False                # if none of the regexps match, return False
+
+
+def prune_regexps(lst, regexps, inplace = False, preprocess = None, pred = None):
     res=[]
     for s in lst:
-        if not any(map(lambda rex: error_free_match(rex, s), regexps)):
+        if not safe_prune(s, regexps, preprocess, pred):
             res.append(s)
     if inplace:
         lst[:]=res
     return res
 
 
-def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, noverify = False, prunedir = [], prunefile = []):
+def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, noverify = False, prunedirs = None, prunefiles = None):
     for root, dirs, files in os.walk(topdir):
-        prune_regexps(dirs, prunedir, inplace = True, preprocess = os.path.basename)
-        prune_regexps(files, prunefile, inplace = True, preprocess = os.path.basename)
+        if prunedirs: prunedirs(dirs, inplace = True)
+        if prunefiles: prunefiles(dirs, inplace = True)
+        # prune_regexps(dirs, prunedir, inplace = True, preprocess = os.path.basename)
+        # prune_regexps(files, prunefile, inplace = True, preprocess = os.path.basename)
         for f in files:
             fname = os.path.join(root, f)
             if not os.path.isfile(fname): # skip over non-regular files
@@ -174,13 +180,32 @@ if __name__ == "__main__":
         hashsums={}
         swaps = {}
         attr_cmp = atime_cmp
-        if not args.hidden and os.name == 'posix': # TODO extend for windows as well
-            args.prunedir.append(r'^\.')
-            args.prunefile.append(r'^\.')
+
+        pred = None
+        if not args.hidden:
+            if os.name == 'posix':
+                def pred(s):
+                    return re.search(r'^\.', os.path.basename(s))
+            elif os.name == 'nt': # Ugly hack. Don't complain to me -- complain to Microsoft
+                import ctypes
+                def pred(s):
+                    try:
+                        attrs = ctypes.windll.kernel32.GetFileAttributesW(s)
+                        assert attrs != -1
+                        return bool(attrs & 2)
+                    except:
+                        return False
+
+        def prunedirs(lst, inplace = False):
+            return prune_regexps(lst, args.prunedir, inplace = inplace, preprocess = os.path.basename, pred = pred)
+
+        def prunefiles(lst, inplace = False):
+            return prune_regexps(lst, args.prunefile, inplace = inplace, preprocess = os.path.basename, pred = pred)
+
         for d in args.dirs:
             res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
                           blockSize = args.bs, noverify = args.noverify,
-                          prunedir=args.prunedir, prunefile=args.prunefile)
+                          prunedirs=prunedirs, prunefiles=prunefiles)
             for f, base in res:
                 baseNew = base
                 if base in swaps:
