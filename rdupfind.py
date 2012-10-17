@@ -85,6 +85,15 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
             if fsize not in hashsums: # the easy case
                 hashsums[fsize] = FileOrHash(isHash = False, filename = fname)
                 found = False
+            elif fsize <= nblocks * blockSize:
+                # if the file is small enough, don't go through all
+                # the complicated things -- simply dispatch to the
+                # final verification step.
+
+                # Assumption: Found is true here
+                noverify = False # So that the one and only check is performed.
+                foh = hashsums[fsize]
+                basename = foh.filename
             else:
                 foh = hashsums[fsize]
                 basename = foh.filename
@@ -105,23 +114,24 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
                     else:
                         foh = foh.hashsum[hash2]
                         basename = foh.filename
-                if found:
-                    if noverify:
+            if found:
+                if noverify:
+                    yield fname, basename
+                else:
+                    if not foh.fullhash:
+                        foh.fullhash = {}
+                        hash1 = hashfile(basename, byteOffsets = range(0, os.path.getsize(basename), blockSize), blockSize = blockSize)
+                        foh.fullhash[hash1] = basename
+                    hash2 = hashfile(fname, byteOffsets = range(0, fsize, blockSize), blockSize = blockSize)
+                    if hash2 in foh.fullhash:
                         yield fname, basename
                     else:
-                        if not foh.fullhash:
-                            foh.fullhash = {}
-                            hash1 = hashfile(basename, byteOffsets = range(0, os.path.getsize(basename), blockSize), blockSize = blockSize)
-                            foh.fullhash[hash1] = basename
-                        hash2 = hashfile(fname, byteOffsets = range(0, fsize, blockSize), blockSize = blockSize)
-                        if hash2 in foh.fullhash:
-                            yield fname, basename
-                        else:
-                            foh.fullhash[hash2] = fname
+                        foh.fullhash[hash2] = fname
 
 def getNewRSeq(n, blockSize, fileSize):
     res = []
     maxN = floor(fileSize/blockSize)
+    # n = min(n, maxN)            # No point getting sure repetitions of the same block.
     l = 0
     for i in range(n):
         r = floor((i+1)*maxN/n)
