@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 # Copyright 2012 Jyothis Vasudevan
 #
@@ -28,7 +28,7 @@ class FileOrHash:
         self.hashsum  = hashsum
         self.filename = filename
         self.fullhash = fullhash
-        self.rseq = rseq
+        self.rseq     = rseq
 
 def hashfile(f, byteOffsets=range(1), blockSize=4096):
     dig    = hashlib.sha1()
@@ -47,9 +47,7 @@ def hashfile(f, byteOffsets=range(1), blockSize=4096):
                 #infile.close()
     finally:
         if os.access(f, os.W_OK):
-            os.utime(f, (atime, mtime)) # Try to restore atime and mtime
-    # except OSError as e:            # Well I tried, didn't I? It just didn't work out.
-    #     pass                        # Just act as if nothing has happened
+            os.utime(f, (atime, mtime)) # Restore atime and mtime if we can
     return dig.hexdigest()
 
 
@@ -79,7 +77,7 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
         prune_regexps(files, prunefile, inplace = True, preprocess = os.path.basename)
         for f in files:
             fname = os.path.join(root, f)
-            if not os.path.isfile(fname): # skip over regular files
+            if not os.path.isfile(fname): # skip over non-regular files
                 continue
             fsize = os.path.getsize(fname)
 
@@ -139,7 +137,6 @@ def attr_cmp(file1, file2):
 def atime_cmp(file1, file2):
     atime1  = os.path.getatime(file1)
     atime2  = os.path.getatime(file2)
-
     if atime1 > atime2:
         return -1
     return 1
@@ -181,9 +178,10 @@ if __name__ == "__main__":
                 if attr_cmp(f, baseNew) < 0: # intended semantics: f is less means f is to be kept
                     swaps[base] = f
                     base, f = f, baseNew
-                base = baseNew
+                else:
+                    base = baseNew
                 if not args.printf:
-                    args.printf = "{0}"
+                    args.printf = '"{0}" is a copy of "{1}"'
                 if not args.quiet:
                     print(args.printf.format(f, base))
     except KeyboardInterrupt as e:
