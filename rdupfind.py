@@ -46,8 +46,11 @@ def hashfile(f, byteOffsets=range(1), blockSize=4096):
                 dig.update(buf)
                 #infile.close()
     finally:
-        if os.access(f, os.W_OK):
+#        if os.access(f, os.W_OK):
+        try:
             os.utime(f, (atime, mtime)) # Restore atime and mtime if we can
+        except:
+            pass
     return dig.hexdigest()
 
 
@@ -74,9 +77,15 @@ def prune_regexps(lst, regexps, inplace = False, preprocess = None, pred = None)
         lst[:]=res
     return res
 
+def walk_file_or_dir(dir_or_file):
+    if os.path.isfile(dir_or_file):
+        return [["", [], [dir_or_file]]]
+    else:
+        return os.walk(dir_or_file)
+
 
 def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, noverify = False, prunedirs = None, prunefiles = None):
-    for root, dirs, files in os.walk(topdir):
+    for root, dirs, files in walk_file_or_dir(topdir):
         if prunedirs: prunedirs(dirs, inplace = True)
         if prunefiles: prunefiles(dirs, inplace = True)
         # prune_regexps(dirs, prunedir, inplace = True, preprocess = os.path.basename)
@@ -162,7 +171,7 @@ if __name__ == "__main__":
     try:
         import argparse
         parser = argparse.ArgumentParser(description = 'Find duplicate files')
-        parser.add_argument('dirs', metavar='Dir', type=str, nargs='*', help='dirs to traverse')
+        parser.add_argument('dirs', metavar='Dir', type=str, nargs='*', help='dirs and/or files to traverse')
         parser.add_argument("--noverify", help="Do not verify using a full hash for each match", action="store_true")
         parser.add_argument("--bs", help="size of a block", type=int, default=4096)
         parser.add_argument("--nblocks", help="Number of blocks to use in one trial", type=int, default=5)
@@ -218,6 +227,6 @@ if __name__ == "__main__":
                 if not args.printf:
                     args.printf = '"{0}" is a copy of "{1}"'
                 if not args.quiet:
-                    print(args.printf.format(f, base))
+                    print(args.printf.format(os.path.relpath(f), os.path.relpath(base)))
     except KeyboardInterrupt as e:
         print("Interrupt received. Quitting")
