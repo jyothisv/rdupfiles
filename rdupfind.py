@@ -185,7 +185,7 @@ if __name__ == "__main__":
         if not args.hidden:
             if os.name == 'posix':
                 def pred(s):
-                    return re.search(r'^\.', os.path.basename(s))
+                    return os.path.basename(s).startswith('.')
             elif os.name == 'nt': # Ugly hack. Don't complain to me -- complain to Microsoft
                 import ctypes
                 def pred(s):
