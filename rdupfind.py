@@ -150,18 +150,18 @@ if __name__ == "__main__":
 
         if not args.dirs:
             args.dirs=["."]
-            hashsums={}
-            if not args.hidden:
-                args.prunedir.append(r'^\.')
-                args.prunefile.append(r'^\.')
-            for d in args.dirs:
-                res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
-                              blockSize = args.bs, noverify = args.noverify,
-                              prunedir=args.prunedir, prunefile=args.prunefile)
-                for f, base in res:
-                    if not args.printf:
-                        args.printf = "{0}"
-                    if not args.quiet:
-                        print(args.printf.format(f, base))
+        hashsums={}
+        if not args.hidden:
+            args.prunedir.append(r'^\.')
+            args.prunefile.append(r'^\.')
+        for d in args.dirs:
+            res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
+                          blockSize = args.bs, noverify = args.noverify,
+                          prunedir=args.prunedir, prunefile=args.prunefile)
+            for f, base in res:
+                if not args.printf:
+                    args.printf = "{0}"
+                if not args.quiet:
+                    print(args.printf.format(f, base))
     except KeyboardInterrupt as e:
         print("Interrupt received. Quitting")
