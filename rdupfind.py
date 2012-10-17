@@ -211,6 +211,7 @@ if __name__ == "__main__":
         def prunefiles(lst, inplace = False):
             return prune_regexps(lst, args.prunefile, inplace = inplace, preprocess = os.path.basename, pred = pred)
 
+        prettyprint = os.path.relpath
         for d in args.dirs:
             res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
                           blockSize = args.bs, noverify = args.noverify,
@@ -219,7 +220,7 @@ if __name__ == "__main__":
                 baseNew = base
                 if base in swaps:
                     baseNew = swaps[base]
-                if attr_cmp(f, baseNew) < 0: # intended semantics: f is less means f is to be kept
+                if attr_cmp(f, baseNew) < 0: # intended semantics: f < baseNew means f is to be kept
                     swaps[base] = f
                     base, f = f, baseNew
                 else:
@@ -227,6 +228,6 @@ if __name__ == "__main__":
                 if not args.printf:
                     args.printf = '"{0}" is a copy of "{1}"'
                 if not args.quiet:
-                    print(args.printf.format(os.path.relpath(f), os.path.relpath(base)))
+                    print(args.printf.format(prettyprint(f), prettyprint(base)))
     except KeyboardInterrupt as e:
         print("Interrupt received. Quitting")
