@@ -131,6 +131,20 @@ def getNewRSeq(n, blockSize, fileSize):
         l = r
     return res
 
+def attr_cmp(file1, file2):
+    if len(file1) > len(file2):
+        return -1
+    return 1
+
+def atime_cmp(file1, file2):
+    atime1  = os.path.getatime(file1)
+    atime2  = os.path.getatime(file2)
+
+    if atime1 > atime2:
+        return -1
+    return 1
+
+
 if __name__ == "__main__":
     try:
         import argparse
@@ -151,7 +165,9 @@ if __name__ == "__main__":
         if not args.dirs:
             args.dirs=["."]
         hashsums={}
-        if not args.hidden:
+        swaps = {}
+        attr_cmp = atime_cmp
+        if not args.hidden and os.name == 'posix': # TODO extend for windows as well
             args.prunedir.append(r'^\.')
             args.prunefile.append(r'^\.')
         for d in args.dirs:
@@ -159,6 +175,13 @@ if __name__ == "__main__":
                           blockSize = args.bs, noverify = args.noverify,
                           prunedir=args.prunedir, prunefile=args.prunefile)
             for f, base in res:
+                baseNew = base
+                if base in swaps:
+                    baseNew = swaps[base]
+                if attr_cmp(f, baseNew) < 0: # intended semantics: f is less means f is to be kept
+                    swaps[base] = f
+                    base, f = f, baseNew
+                base = baseNew
                 if not args.printf:
                     args.printf = "{0}"
                 if not args.quiet:
