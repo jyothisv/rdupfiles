@@ -20,6 +20,7 @@ import os
 import hashlib
 from math import floor
 from random import randint
+import re
 
 class FileOrHash:
     def __init__(self, isHash, filename = "", hashsum = {}, rseq = [], fullhash = None):
@@ -34,23 +35,48 @@ def hashfile(f, byteOffsets=range(1), blockSize=4096):
     # Get access and modification times for restoring later
     atime  = os.path.getatime(f)
     mtime  = os.path.getmtime(f)
-    infile = open(f, mode="rb")
-    for byte in byteOffsets:
-        infile.seek(byte, 0)
-        buf = infile.read(blockSize)
-        if not buf:
-            continue
-        dig.update(buf)
-    infile.close()
+
     try:
-        os.utime(f, (atime, mtime)) # Try to restore atime and mtime
-    except OSError as e:            # Well I tried, didn't I? It just didn't work out.
-        pass                        # Just act as if nothing has happened
+        with open(f, mode="rb") as infile:
+            for byte in byteOffsets:
+                infile.seek(byte, 0)
+                buf = infile.read(blockSize)
+                if not buf:
+                    continue
+                dig.update(buf)
+                #infile.close()
+    finally:
+        if os.access(f, os.W_OK):
+            os.utime(f, (atime, mtime)) # Try to restore atime and mtime
+    # except OSError as e:            # Well I tried, didn't I? It just didn't work out.
+    #     pass                        # Just act as if nothing has happened
     return dig.hexdigest()
 
 
-def dupfind(topdir, hashsums={}, nblocks = 20, ntrials=2, blockSize = 4096, noverify = False):
+def prune_regexps(lst, regexps, inplace = False, preprocess = None):
+    if not regexps:
+        return lst
+
+    def error_free_match(rex, s):
+        if preprocess:
+            s = preprocess(s)
+        try:
+            return re.search(rex, s)
+        except:
+            return False
+    res=[]
+    for s in lst:
+        if not any(map(lambda rex: error_free_match(rex, s), regexps)):
+            res.append(s)
+    if inplace:
+        lst[:]=res
+    return res
+
+
+def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, noverify = False, prunedir = [], prunefile = []):
     for root, dirs, files in os.walk(topdir):
+        prune_regexps(dirs, prunedir, inplace = True, preprocess = os.path.basename)
+        prune_regexps(files, prunefile, inplace = True, preprocess = os.path.basename)
         for f in files:
             fname = os.path.join(root, f)
             if not os.path.isfile(fname): # skip over regular files
@@ -116,15 +142,22 @@ if __name__ == "__main__":
         parser.add_argument("--ntrials", help="Number of trials to perform", type=int, default=2)
         parser.add_argument("--printf", help="Printf format string. {0} for the duplicate file, {1} for the base file", type=str, default=None)
         parser.add_argument("-q", "--quiet", help="print each file as it is found", action="store_true")
-
+        parser.add_argument("--prunedir", help="Prune directories matching this regular expression", action='append', default=[])
+        parser.add_argument("--prunefile", help="Prune files matching this regular expression", action='append', default=[])
+        parser.add_argument("--hidden", help="Include hidden files an directories also", action="store_true")
 
         args = parser.parse_args()
 
         if not args.dirs:
             args.dirs=["."]
             hashsums={}
+            if not args.hidden:
+                args.prunedir.append(r'^\.')
+                args.prunefile.append(r'^\.')
             for d in args.dirs:
-                res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials, blockSize = args.bs, noverify = args.noverify)
+                res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
+                              blockSize = args.bs, noverify = args.noverify,
+                              prunedir=args.prunedir, prunefile=args.prunefile)
                 for f, base in res:
                     if not args.printf:
                         args.printf = "{0}"
