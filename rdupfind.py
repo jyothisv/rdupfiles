@@ -23,12 +23,12 @@ from random import randint
 import re
 
 class FileOrHash:
-    def __init__(self, isHash, filename = "", hashsum = {}, rseq = [], fullhash = None):
+    def __init__(self, isHash, filename = None, hashsum = {}, rseqs = None, fullhash = None):
         self.isHash   = isHash
         self.hashsum  = hashsum
         self.filename = filename
         self.fullhash = fullhash
-        self.rseq     = rseq
+        self.rseqs     = rseqs
 
 def hashfile(f, byteOffsets=None, blockSize=4096):
     dig    = hashlib.sha1()
@@ -116,16 +116,21 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
                 basename = foh.filename
             else:
                 foh = hashsums[fsize]
+                if not foh.rseqs:
+                    foh.rseqs = []
+                rseqs = foh.rseqs
                 basename = foh.filename
                 for i in range(ntrials):
                     if not foh.isHash:
-                        rseq = getNewRSeq(nblocks, blockSize, fsize)
+                        if len(rseqs) <= i: # If there are not enough random sequences already, create one
+                            rseqs.append(getNewRSeq(nblocks, blockSize, fsize))
+                        rseq = rseqs[i]
                         #rseq.sort()
                         hash1 = hashfile(foh.filename, byteOffsets = rseq)
                         foh.hashsum[hash1] = FileOrHash(isHash = False, filename = foh.filename)
-                        foh.rseq = rseq
+                        # foh.rseq = rseq
                         foh.isHash = True
-                    rseq = foh.rseq
+                    rseq = rseqs[i]
                     hash2 = hashfile(fname, byteOffsets = rseq)
                     if hash2 not in foh.hashsum:
                         foh.hashsum[hash2] = FileOrHash(isHash = False, filename = fname)
