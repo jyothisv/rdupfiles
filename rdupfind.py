@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 # Copyright 2012 Jyothis Vasudevan
 #
@@ -30,7 +30,7 @@ class FileOrHash:
         self.fullhash = fullhash
         self.rseq     = rseq
 
-def hashfile(f, byteOffsets=range(1), blockSize=4096):
+def hashfile(f, byteOffsets=None, blockSize=4096):
     dig    = hashlib.sha1()
     # Get access and modification times for restoring later
     atime  = os.path.getatime(f)
@@ -38,15 +38,20 @@ def hashfile(f, byteOffsets=range(1), blockSize=4096):
 
     try:
         with open(f, mode="rb") as infile:
-            for byte in byteOffsets:
-                infile.seek(byte, 0)
-                buf = infile.read(blockSize)
-                if not buf:
-                    continue
-                dig.update(buf)
-                #infile.close()
+            if not byteOffsets:
+                while True:
+                    buf = infile.read(blockSize)
+                    if not buf:
+                        break   # EOF
+                    dig.update(buf)
+            else:
+                for byte in byteOffsets:
+                    infile.seek(byte, 0)
+                    buf = infile.read(blockSize)
+                    if not buf:
+                        continue
+                    dig.update(buf)
     finally:
-#        if os.access(f, os.W_OK):
         try:
             os.utime(f, (atime, mtime)) # Restore atime and mtime if we can
         except:
@@ -135,9 +140,9 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
                 else:
                     if not foh.fullhash:
                         foh.fullhash = {}
-                        hash1 = hashfile(basename, byteOffsets = range(0, os.path.getsize(basename), blockSize), blockSize = blockSize)
+                        hash1 = hashfile(basename, blockSize = blockSize)
                         foh.fullhash[hash1] = basename
-                    hash2 = hashfile(fname, byteOffsets = range(0, fsize, blockSize), blockSize = blockSize)
+                    hash2 = hashfile(fname, blockSize = blockSize)
                     if hash2 in foh.fullhash:
                         yield fname, basename
                     else:
@@ -170,11 +175,14 @@ def atime_cmp(file1, file2):
 if __name__ == "__main__":
     try:
         import argparse
+        import sys
+        pyversion = sys.version_info[0]
+
         parser = argparse.ArgumentParser(description = 'Find duplicate files')
         parser.add_argument('dirs', metavar='Dir', type=str, nargs='*', help='dirs and/or files to traverse')
         parser.add_argument("--noverify", help="Do not verify using a full hash for each match", action="store_true")
         parser.add_argument("--bs", help="size of a block", type=int, default=4096)
-        parser.add_argument("--nblocks", help="Number of blocks to use in one trial", type=int, default=5)
+        parser.add_argument("--nblocks", help="Number of blocks to use in one trial", type=int, default=10)
         parser.add_argument("--ntrials", help="Number of trials to perform", type=int, default=2)
         parser.add_argument("--printf", help="Printf format string. {0} for the duplicate file, {1} for the base file", type=str, default=None)
         parser.add_argument("-q", "--quiet", help="print each file as it is found", action="store_true")
@@ -199,6 +207,8 @@ if __name__ == "__main__":
                 import ctypes
                 def pred(s):
                     try:
+                        if pyversion < 3:
+                            s = unicode(s)
                         attrs = ctypes.windll.kernel32.GetFileAttributesW(s)
                         assert attrs != -1
                         return bool(attrs & 2)
