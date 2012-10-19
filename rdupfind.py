@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-
 import os
 import hashlib
 from math import floor
@@ -35,7 +34,6 @@ def hashfile(f, byteOffsets=None, blockSize=4096):
     # Get access and modification times for restoring later
     atime  = os.path.getatime(f)
     mtime  = os.path.getmtime(f)
-
     try:
         with open(f, mode="rb") as infile:
             if not byteOffsets:
@@ -58,7 +56,6 @@ def hashfile(f, byteOffsets=None, blockSize=4096):
             pass
     return dig.hexdigest()
 
-
 def safe_prune(s, regexps, preprocess = None, pred = None):
     if pred and pred(s):
         return True
@@ -71,7 +68,6 @@ def safe_prune(s, regexps, preprocess = None, pred = None):
         except:
             return False
     return False                # if none of the regexps match, return False
-
 
 def prune_regexps(lst, regexps, inplace = False, preprocess = None, pred = None):
     res=[]
@@ -88,8 +84,7 @@ def walk_file_or_dir(dir_or_file):
     else:
         return os.walk(dir_or_file)
 
-
-def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, noverify = False, prunedirs = None, prunefiles = None):
+def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, noverify = False, prunedirs = None, prunefiles = None, noupdate = False):
     for root, dirs, files in walk_file_or_dir(topdir):
         if prunedirs: prunedirs(dirs, inplace = True)
         if prunefiles: prunefiles(dirs, inplace = True)
@@ -100,10 +95,11 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
             if not os.path.isfile(fname): # skip over non-regular files
                 continue
             fsize = os.path.getsize(fname)
-
             found = True
+
             if fsize not in hashsums: # the easy case
-                hashsums[fsize] = FileOrHash(isHash = False, filename = fname)
+                if not noupdate:
+                    hashsums[fsize] = FileOrHash(isHash = False, filename = fname)
                 found = False
             elif fsize <= nblocks * blockSize:
                 # if the file is small enough, don't go through all
@@ -120,6 +116,7 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
                     foh.rseqs = []
                 rseqs = foh.rseqs
                 basename = foh.filename
+
                 for i in range(ntrials):
                     if not foh.isHash:
                         if len(rseqs) <= i: # If there are not enough random sequences already, create one
@@ -133,8 +130,9 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
                     rseq = rseqs[i]
                     hash2 = hashfile(fname, byteOffsets = rseq)
                     if hash2 not in foh.hashsum:
-                        foh.hashsum[hash2] = FileOrHash(isHash = False, filename = fname)
                         found = False
+                        if not noupdate:
+                            foh.hashsum[hash2] = FileOrHash(isHash = False, filename = fname)
                         break
                     else:
                         foh = foh.hashsum[hash2]
@@ -150,7 +148,7 @@ def dupfind(topdir, hashsums = {}, nblocks = 5, ntrials=2, blockSize = 4096, nov
                     hash2 = hashfile(fname, blockSize = blockSize)
                     if hash2 in foh.fullhash:
                         yield fname, basename
-                    else:
+                    elif not noupdate:
                         foh.fullhash[hash2] = fname
 
 def getNewRSeq(n, blockSize, fileSize):
@@ -164,7 +162,7 @@ def getNewRSeq(n, blockSize, fileSize):
         l = r
     return res
 
-def attr_cmp(file1, file2):
+def attr_len(file1, file2):
     if len(file1) > len(file2):
         return -1
     return 1
@@ -176,6 +174,8 @@ def atime_cmp(file1, file2):
         return -1
     return 1
 
+def attr_iden(file1, file2):
+    return 1
 
 if __name__ == "__main__":
     try:
@@ -187,13 +187,14 @@ if __name__ == "__main__":
         parser.add_argument('dirs', metavar='Dir', type=str, nargs='*', help='dirs and/or files to traverse')
         parser.add_argument("--noverify", help="Do not verify using a full hash for each match", action="store_true")
         parser.add_argument("--bs", help="size of a block", type=int, default=4096)
-        parser.add_argument("--nblocks", help="Number of blocks to use in one trial", type=int, default=10)
-        parser.add_argument("--ntrials", help="Number of trials to perform", type=int, default=2)
+        parser.add_argument("--nblocks", help="Number of blocks to use in one trial", type=int, default=5)
+        parser.add_argument("--ntrials", help="Number of trials to perform", type=int, default=4)
         parser.add_argument("--printf", help="Printf format string. {0} for the duplicate file, {1} for the base file", type=str, default=None)
         parser.add_argument("-q", "--quiet", help="print each file as it is found", action="store_true")
         parser.add_argument("--prunedir", help="Prune directories matching this regular expression", action='append', default=[])
         parser.add_argument("--prunefile", help="Prune files matching this regular expression", action='append', default=[])
         parser.add_argument("--hidden", help="Include hidden files an directories also", action="store_true")
+        parser.add_argument("-s", "--search", help="Search for this file or files in this directory in the rest of the arguments", action='append', default=[])
 
         args = parser.parse_args()
 
@@ -202,7 +203,6 @@ if __name__ == "__main__":
         hashsums={}
         swaps = {}
         attr_cmp = atime_cmp
-
         pred = None
         if not args.hidden:
             if os.name == 'posix':
@@ -226,11 +226,36 @@ if __name__ == "__main__":
         def prunefiles(lst, inplace = False):
             return prune_regexps(lst, args.prunefile, inplace = inplace, preprocess = os.path.basename, pred = pred)
 
-        prettyprint = os.path.relpath
+        def unescape(s):
+            if pyversion >= 3:
+                import codecs
+                return codecs.getdecoder('unicode_escape')(s)[0]
+            else:
+                return s.decode('string-escape')
+
+        prettyprint = lambda x: x # os.path.relpath
+
+        if not args.printf:
+            args.printf = '"{0}" is a copy of "{1}"'
+        else:
+            args.printf = unescape(args.printf)
+
+        noupdate = False        # The default
+        if args.search:         # if we're told to search for specific files, we need only to make a hash of those files.
+            for d in args.search:
+                res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
+                              blockSize = args.bs, noverify = args.noverify,
+                              prunedirs=prunedirs, prunefiles=prunefiles)
+                for f, base in res:
+                    pass        # No need to print anything for now. We're doing this mainly to update hashsums.
+
+            noupdate = True
+            attr_cmp = attr_iden
+
         for d in args.dirs:
             res = dupfind(d, hashsums, nblocks = args.nblocks, ntrials = args.ntrials,
                           blockSize = args.bs, noverify = args.noverify,
-                          prunedirs=prunedirs, prunefiles=prunefiles)
+                          prunedirs=prunedirs, prunefiles=prunefiles, noupdate = noupdate)
             for f, base in res:
                 baseNew = base
                 if base in swaps:
@@ -240,8 +265,6 @@ if __name__ == "__main__":
                     base, f = f, baseNew
                 else:
                     base = baseNew
-                if not args.printf:
-                    args.printf = '"{0}" is a copy of "{1}"'
                 if not args.quiet:
                     print(args.printf.format(prettyprint(f), prettyprint(base)))
     except KeyboardInterrupt as e:
